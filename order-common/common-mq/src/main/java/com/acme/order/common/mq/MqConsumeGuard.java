@@ -20,11 +20,16 @@ public final class MqConsumeGuard {
     }
 
     public boolean first(String group, String eventId) {
+        return first(group, eventId, 0L);
+    }
+
+    public boolean first(String group, String eventId, long userId) {
         try {
             jdbc.update(
-                "INSERT INTO mq_consume_log(id,consumer_group,event_id,consume_status,create_time,update_time) "
-                    + "VALUES(?,?,?,?,?,?)",
-                Math.abs((group + eventId).hashCode()), group, eventId, 0, OffsetDateTime.now(), OffsetDateTime.now());
+                "INSERT INTO mq_consume_log(id,user_id,consumer_group,event_id,consume_status,create_time,update_time) "
+                    + "VALUES(?,?,?,?,?,?,?)",
+                Math.abs((group + eventId).hashCode()), userId, group, eventId, 0, OffsetDateTime.now(),
+                OffsetDateTime.now());
             return true;
         } catch (DuplicateKeyException ignored) {
             return false;
@@ -32,8 +37,13 @@ public final class MqConsumeGuard {
     }
 
     public void success(String group, String eventId) {
+        success(group, eventId, 0L);
+    }
+
+    public void success(String group, String eventId, long userId) {
         jdbc.update(
-            "UPDATE mq_consume_log SET consume_status=1,update_time=NOW(3) WHERE consumer_group=? AND event_id=?",
-            group, eventId);
+            "UPDATE mq_consume_log SET consume_status=1,update_time=NOW(3) "
+                + "WHERE consumer_group=? AND event_id=? AND user_id=?",
+            group, eventId, userId);
     }
 }

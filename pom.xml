@@ -12,8 +12,8 @@
     <artifactId>mall-order-system</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>Mall Order System</name>
-    <description>企业级分布式订单系统</description>
+    <name>Java 订单支付系统</name>
+    <description>覆盖订单创建、库存预占、支付通知与履约流转的 Java 订单支付系统</description>
     <modules>
         <module>order-common</module>
         <module>order-api</module>
@@ -29,6 +29,8 @@
         <java.version>17</java.version>
         <spring-cloud.version>2025.0.0</spring-cloud.version>
         <spring-cloud-alibaba.version>2025.0.0.0</spring-cloud-alibaba.version>
+        <sentinel.version>1.8.9</sentinel.version>
+        <shardingsphere.version>5.5.2</shardingsphere.version>
         <jjwt.version>0.12.6</jjwt.version>
         <testcontainers.version>1.21.3</testcontainers.version>
     </properties>

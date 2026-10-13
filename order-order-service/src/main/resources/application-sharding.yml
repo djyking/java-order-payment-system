@@ -1,0 +1,9 @@
+order:
+  sharding:
+    ds0-url: "${SHARD_DB0_URL:jdbc:mysql://localhost:13306/order_trade_0?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}"
+    ds1-url: "${SHARD_DB1_URL:jdbc:mysql://localhost:13306/order_trade_1?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}"
+    username: "${MYSQL_USER:order}"
+    password: "${MYSQL_PASSWORD:order123456}"
+
+# 分片模式使用底层物理数据源逐库逐表对账，避免在 ShardingSphere 逻辑库内执行跨 schema JOIN。
+jobs.reconciliation.delay-ms: 86400000

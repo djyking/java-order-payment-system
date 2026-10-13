@@ -2,6 +2,7 @@ target/
 .idea/
 *.iml
 *.log
+docker/.env
 .env
 data/
 docker/**/data/

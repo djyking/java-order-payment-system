@@ -4,6 +4,8 @@ import com.acme.order.common.core.ApiResponse;
 import com.acme.order.common.core.BizException;
 import com.acme.order.common.core.ErrorCode;
 import org.slf4j.MDC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,6 +19,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BizException.class)
     ResponseEntity<ApiResponse<Void>> business(BizException ex) {
@@ -33,6 +37,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiResponse<Void>> unexpected(Exception ex) {
+        LOG.error("Unhandled request exception, traceId={}", MDC.get("traceId"), ex);
         return ResponseEntity.status(500)
             .body(ApiResponse.error(ErrorCode.SYSTEM_BUSY, "系统繁忙，请稍后重试", MDC.get("traceId")));
     }

@@ -1,21 +1,34 @@
 server: { port: 8080 }
 spring:
   application: { name: order-gateway }
-  data.redis: { host: "${REDIS_HOST:localhost}", port: 6379 }
+  config:
+    import:
+      - "optional:nacos:order-system-shared.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+      - "optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+  data.redis: { host: "${REDIS_HOST:localhost}", port: "${REDIS_PORT:16379}" }
   cloud:
+    nacos:
+      discovery: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}" }
+      config: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}", file-extension: yml }
+    sentinel:
+      eager: true
+      transport: { dashboard: "${SENTINEL_DASHBOARD:127.0.0.1:18858}", port: 8719 }
     gateway:
-      routes:
-        - { id: user, uri: "${USER_URL:http://localhost:8081}", predicates: ["Path=/api/auth/**,/api/users/**"] }
-        - { id: product, uri: "${PRODUCT_URL:http://localhost:8082}", predicates: ["Path=/api/products/**,/api/skus/**"] }
-        - id: order
-          uri: "${ORDER_URL:http://localhost:8084}"
-          predicates: ["Path=/api/orders/**"]
-          filters:
-            - name: RequestRateLimiter
-              args: { key-resolver: "#{@userKeyResolver}", redis-rate-limiter.replenishRate: 50, redis-rate-limiter.burstCapacity: 100, redis-rate-limiter.requestedTokens: 1 }
-        - { id: payment, uri: "${PAYMENT_URL:http://localhost:8085}", predicates: ["Path=/api/payments/**"] }
-        - { id: query, uri: "${QUERY_URL:http://localhost:8086}", predicates: ["Path=/api/admin/orders/**"] }
+      server:
+        webflux:
+          routes:
+            - { id: user, uri: "lb://order-user-service", predicates: ["Path=/api/auth/**,/api/users/**"] }
+            - { id: product, uri: "lb://order-product-service", predicates: ["Path=/api/products/**,/api/skus/**"] }
+            - id: order
+              uri: "lb://order-order-service"
+              predicates: ["Path=/api/orders/**,/api/seckill/**"]
+              filters:
+                - name: RequestRateLimiter
+                  args: { key-resolver: "#{@userKeyResolver}", redis-rate-limiter.replenishRate: 50, redis-rate-limiter.burstCapacity: 100, redis-rate-limiter.requestedTokens: 1 }
+            - { id: payment, uri: "lb://order-payment-service", predicates: ["Path=/api/payments/**"] }
+            - { id: query, uri: "lb://order-query-service", predicates: ["Path=/api/admin/orders/**,/admin/query-projection/**"] }
 management.endpoints.web.exposure.include: health,info,prometheus
+management.metrics.tags.application: ${spring.application.name}
 security:
   jwt.secret: ${JWT_SECRET:change-this-enterprise-order-system-secret-at-least-32-bytes}
   allow-dev-header: ${ALLOW_DEV_HEADER:true}

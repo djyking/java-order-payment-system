@@ -1,10 +1,19 @@
 server: { port: 8086 }
 spring:
   application: { name: order-query-service }
-  datasource: { url: "jdbc:mysql://${MYSQL_HOST:localhost}:3306/order_query?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai", username: "${MYSQL_USER:order}", password: "${MYSQL_PASSWORD:order123456}" }
+  config.import:
+    - "optional:nacos:order-system-shared.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+    - "optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+  cloud.nacos:
+    discovery: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}" }
+    config: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}", file-extension: yml }
+  datasource: { url: "jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:13306}/order_query?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai", username: "${MYSQL_USER:order}", password: "${MYSQL_PASSWORD:order123456}" }
   rabbitmq:
     host: "${RABBITMQ_HOST:localhost}"
+    port: "${RABBITMQ_PORT:25672}"
     username: "${RABBITMQ_USER:order}"
     password: "${RABBITMQ_PASSWORD:order123456}"
     listener.simple: { default-requeue-rejected: false, retry.enabled: true, retry.max-attempts: 4, retry.initial-interval: 500ms, retry.multiplier: 2 }
 management.endpoints.web.exposure.include: health,info,prometheus
+management.metrics.tags.application: ${spring.application.name}
+projection.rebuild-enabled: ${PROJECTION_REBUILD_ENABLED:false}

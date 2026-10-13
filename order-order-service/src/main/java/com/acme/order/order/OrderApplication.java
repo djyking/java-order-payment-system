@@ -5,6 +5,7 @@ import com.acme.order.common.redis.IdempotencyTokenService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,17 +37,23 @@ public class OrderApplication {
     }
 
     @Bean("productClient")
-    RestClient productClient(@Value("${service-url.product}") String u) {
-        return RestClient.builder().baseUrl(u).build();
+    RestClient productClient(RestClient.Builder builder, @Value("${service-url.product}") String u) {
+        return builder.baseUrl(u).build();
     }
 
     @Bean("inventoryClient")
-    RestClient inventoryClient(@Value("${service-url.inventory}") String u) {
-        return RestClient.builder().baseUrl(u).build();
+    RestClient inventoryClient(RestClient.Builder builder, @Value("${service-url.inventory}") String u) {
+        return builder.baseUrl(u).build();
     }
 
     @Bean("paymentClient")
-    RestClient paymentClient(@Value("${service-url.payment}") String u) {
-        return RestClient.builder().baseUrl(u).build();
+    RestClient paymentClient(RestClient.Builder builder, @Value("${service-url.payment}") String u) {
+        return builder.baseUrl(u).build();
+    }
+
+    @Bean
+    @LoadBalanced
+    RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
     }
 }

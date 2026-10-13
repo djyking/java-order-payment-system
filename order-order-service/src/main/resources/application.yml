@@ -1,16 +1,31 @@
 server: { port: 8084 }
 spring:
   application: { name: order-order-service }
-  datasource: { url: "jdbc:mysql://${MYSQL_HOST:localhost}:3306/order_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai", username: "${MYSQL_USER:order}", password: "${MYSQL_PASSWORD:order123456}" }
-  data.redis: { host: "${REDIS_HOST:localhost}", port: 6379 }
+  config.import:
+    - "optional:nacos:order-system-shared.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+    - "optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+  cloud:
+    nacos:
+      discovery: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}" }
+      config: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}", file-extension: yml }
+    sentinel:
+      eager: true
+      transport: { dashboard: "${SENTINEL_DASHBOARD:127.0.0.1:18858}", port: 8720 }
+  datasource: { url: "jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:13306}/order_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai", username: "${MYSQL_USER:order}", password: "${MYSQL_PASSWORD:order123456}" }
+  data.redis: { host: "${REDIS_HOST:localhost}", port: "${REDIS_PORT:16379}" }
   rabbitmq:
     host: "${RABBITMQ_HOST:localhost}"
+    port: "${RABBITMQ_PORT:25672}"
     username: "${RABBITMQ_USER:order}"
     password: "${RABBITMQ_PASSWORD:order123456}"
     publisher-confirm-type: correlated
     publisher-returns: true
     template.mandatory: true
     listener.simple: { default-requeue-rejected: false, retry.enabled: true, retry.max-attempts: 4, retry.initial-interval: 500ms, retry.multiplier: 2 }
-service-url: { product: "${PRODUCT_URL:http://localhost:8082}", inventory: "${INVENTORY_URL:http://localhost:8083}", payment: "${PAYMENT_URL:http://localhost:8085}" }
-debug.failure: { inventory-after-reserve: false, order-before-commit: false, mq-publish: false, payment-notify: false }
+service-url: { product: "http://order-product-service", inventory: "http://order-inventory-service", payment: "http://order-payment-service" }
+debug.failure:
+  inventory-after-reserve: "${DEBUG_ORDER_INVENTORY_AFTER_RESERVE:false}"
+  order-before-commit: "${DEBUG_ORDER_BEFORE_COMMIT:false}"
+  mq-publish: "${DEBUG_ORDER_MQ_PUBLISH:false}"
 management.endpoints.web.exposure.include: health,info,prometheus
+management.metrics.tags.application: ${spring.application.name}

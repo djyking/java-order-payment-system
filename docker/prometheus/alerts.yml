@@ -1,0 +1,33 @@
+groups:
+  - name: order-system-business
+    rules:
+      - alert: OutboxFailed
+        expr: max(outbox_failed_count) > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "订单系统存在最终失败的 Outbox 事件" }
+      - alert: OrderErrorRateHigh
+        expr: sum(rate(order_create_failure_total[5m])) / clamp_min(sum(rate(order_create_success_total[5m]) + rate(order_create_failure_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "订单创建错误率超过 5%" }
+      - alert: InventoryErrorRateHigh
+        expr: sum(rate(inventory_reserve_failure_total[5m])) / clamp_min(sum(rate(inventory_reserve_success_total[5m]) + rate(inventory_reserve_failure_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "库存预占错误率超过 5%" }
+      - alert: HttpP99High
+        expr: histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[5m])) by (le,application)) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "服务 HTTP P99 延迟持续超过 1 秒" }
+      - alert: RabbitMqBacklogGrowing
+        expr: sum(rabbitmq_queue_messages_ready) > 1000
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "RabbitMQ 待消费消息持续积压" }
+      - alert: DeadLetterQueueNotEmpty
+        expr: sum(rabbitmq_queue_messages{queue=~".*\\.dlq"}) > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "RabbitMQ 死信队列存在消息" }

@@ -7,6 +7,10 @@ import com.acme.order.common.core.BizException;
 import com.acme.order.common.core.ErrorCode;
 import com.acme.order.common.core.Ids;
 import com.acme.order.common.redis.IdempotencyTokenService;
+import com.acme.order.common.observability.OrderMetrics;
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,14 +28,19 @@ public class OrderService {
     private final OrderStateMachine machine;
     private final IdempotencyTokenService tokens;
     private final OrderTxWriter writer;
+    private final OrderMetrics metrics;
+
+    @Value("${debug.failure.inventory-after-reserve:false}")
+    private boolean failAfterInventoryReserve;
 
     public OrderService(RemoteClients r, OrderRepository p, OrderStateMachine m, IdempotencyTokenService t,
-        OrderTxWriter w) {
+        OrderTxWriter w, OrderMetrics metrics) {
         remote = r;
         repo = p;
         machine = m;
         tokens = t;
         writer = w;
+        this.metrics = metrics;
     }
 
     public OrderDtos.SettlementView settle(List<OrderDtos.Item> items) {
@@ -44,7 +53,9 @@ public class OrderService {
             lines.stream().mapToLong(OrderDtos.SettlementLine::amountCent).sum());
     }
 
+    @SentinelResource(value = "order.create", blockHandler = "createBlocked")
     public OrderDtos.OrderView create(long user, String token, List<OrderDtos.Item> requested) {
+        metrics.increment("order_create_total");
         if (!tokens.acquire(user, token)) {
             throw new BizException(ErrorCode.ORDER_DUPLICATE_SUBMIT, "请勿重复提交");
         }
@@ -55,10 +66,15 @@ public class OrderService {
             var quote = settle(requested);
             remote.reserve(no, user, requested.stream().map(i -> new Line(i.skuId(), i.quantity())).toList());
             reserved = true;
+            if (failAfterInventoryReserve) {
+                throw new IllegalStateException("fault injection: inventory reserved before order persistence");
+            }
             writer.persist(id, no, user, quote);
             tokens.complete(user, token, no);
+            metrics.success("order_create");
             return view(no, user);
         } catch (Exception e) {
+            metrics.failure("order_create");
             if (reserved) {
                 try {
                     remote.release(no);
@@ -71,10 +87,15 @@ public class OrderService {
         }
     }
 
+    public OrderDtos.OrderView createBlocked(long user, String token, List<OrderDtos.Item> requested,
+        BlockException cause) {
+        throw new BizException(ErrorCode.SYSTEM_BUSY, "订单创建请求过多，请稍后重试");
+    }
+
     public OrderDtos.OrderView view(String no, long user) {
         var s = repo.get(no, user);
         return new OrderDtos.OrderView(no, user, s.status().name(), s.payStatus() == 20 ? "PAID" : "UNPAID", s.total(),
-            repo.items(no), s.created());
+            repo.items(s), s.created());
     }
 
     public List<OrderDtos.OrderView> list(long user, int page, int size) {
@@ -136,7 +157,19 @@ public class OrderService {
     @Transactional
     public void closeExpired() {
         for (var s : repo.expired()) {
-            repo.transit(s, OrderStatus.CANCELED, "TIMEOUT_CANCEL", "OrderCanceled");
+            if (repo.transit(s, OrderStatus.CANCELED, "TIMEOUT_CANCEL", "OrderCanceled")) {
+                metrics.increment("order_timeout_close_total");
+            }
+        }
+    }
+
+    @Transactional
+    public void closeFromDelay(String no, long user) {
+        var snapshot = repo.get(no, user);
+        if (snapshot.status() == OrderStatus.WAIT_PAY) {
+            if (repo.transit(snapshot, OrderStatus.CANCELED, "MQ_TIMEOUT_CANCEL", "OrderCanceled")) {
+                metrics.increment("order_timeout_close_total");
+            }
         }
     }
 }

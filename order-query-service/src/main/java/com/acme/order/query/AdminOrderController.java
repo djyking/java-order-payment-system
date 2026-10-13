@@ -31,7 +31,8 @@ public class AdminOrderController {
     ApiResponse<List<Map<String, Object>>> list(@RequestParam(required = false) String status,
         @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
         int safe = Math.min(Math.max(size, 1), 100);
-        var sql = "SELECT order_no,user_id,status,pay_status,total_amount_cent,create_time,update_time "
+        var sql = "SELECT order_no,user_id,status,pay_status,total_amount_cent,pay_amount_cent,item_count,sku_count,"
+            + "first_item_name,pay_time,cancel_time,create_time,update_time "
             + "FROM order_query_projection"
             + (status == null ? "" : " WHERE status=?") + " ORDER BY create_time DESC LIMIT ? OFFSET ?";
         List<Map<String, Object>> rows = status == null ? jdbc.queryForList(sql, safe, page * safe)

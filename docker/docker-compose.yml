@@ -5,43 +5,62 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root123456
       TZ: Asia/Shanghai
-    ports: ["3306:3306"]
+    ports: ["13306:3306"]
     volumes:
       - mysql-data:/var/lib/mysql
       - ../sql:/docker-entrypoint-initdb.d:ro
     healthcheck: { test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot123456"], interval: 10s, timeout: 5s, retries: 20 }
   redis:
     image: redis:7.4-alpine
-    ports: ["6379:6379"]
+    ports: ["16379:6379"]
     volumes: ["redis-data:/data"]
     command: ["redis-server", "--appendonly", "yes"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 10s, timeout: 3s, retries: 10 }
   rabbitmq:
-    image: rabbitmq:4.1-management
+    image: rabbitmq:3.13-management-alpine
     environment: { RABBITMQ_DEFAULT_USER: order, RABBITMQ_DEFAULT_PASS: order123456 }
-    ports: ["5672:5672", "15672:15672"]
+    ports: ["25672:5672", "25673:15672", "25692:15692"]
     volumes: ["rabbit-data:/var/lib/rabbitmq"]
+    command: ["/bin/sh", "-c", "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"]
     healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, timeout: 5s, retries: 20 }
   nacos:
-    image: nacos/nacos-server:v2.4.3
-    environment: { MODE: standalone, NACOS_AUTH_ENABLE: "false" }
-    ports: ["8848:8848", "9848:9848"]
+    image: nacos/nacos-server:v3.0.3
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: "${NACOS_AUTH_TOKEN}"
+      NACOS_AUTH_IDENTITY_KEY: "${NACOS_AUTH_IDENTITY_KEY}"
+      NACOS_AUTH_IDENTITY_VALUE: "${NACOS_AUTH_IDENTITY_VALUE}"
+    ports: ["18848:8848", "18849:8080", "19848:9848"]
     volumes: ["nacos-data:/home/nacos/data"]
-    healthcheck: { test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/v1/console/health/readiness || exit 1"], interval: 15s, timeout: 5s, retries: 30 }
+    healthcheck: { test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/8848' && timeout 2 bash -c '</dev/tcp/127.0.0.1/8080'"], interval: 15s, timeout: 5s, retries: 30 }
+  sentinel:
+    image: eclipse-temurin:17-jre-jammy
+    command: ["java", "-Dserver.port=8858", "-Dcsp.sentinel.dashboard.server=localhost:8858", "-Dproject.name=sentinel-dashboard", "-jar", "/opt/sentinel-dashboard.jar"]
+    ports: ["18858:8858"]
+    volumes:
+      - type: bind
+        source: "${SENTINEL_JAR_PATH:-D:/middleware/runtime/sentinel-1.8.9/sentinel-dashboard-1.8.9.jar}"
+        target: /opt/sentinel-dashboard.jar
+        read_only: true
+    healthcheck: { test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/8858'"], interval: 10s, timeout: 3s, retries: 30 }
   prometheus:
-    image: prom/prometheus:v3.5.0
-    ports: ["9090:9090"]
+    image: prom/prometheus:v3.14.0
+    ports: ["19090:9090"]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus-data:/prometheus
     extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/ready"], interval: 10s, timeout: 3s, retries: 20 }
   grafana:
-    image: grafana/grafana:12.1.0
+    image: grafana/grafana:13.2.1
     environment: { GF_SECURITY_ADMIN_USER: admin, GF_SECURITY_ADMIN_PASSWORD: admin123456 }
-    ports: ["3000:3000"]
+    ports: ["13000:3000"]
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboard.json:/var/lib/grafana/dashboards/order-system.json:ro
     depends_on: [prometheus]
+    healthcheck: { test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"], interval: 10s, timeout: 3s, retries: 20 }
 volumes: { mysql-data: {}, redis-data: {}, rabbit-data: {}, nacos-data: {}, prometheus-data: {}, grafana-data: {} }
