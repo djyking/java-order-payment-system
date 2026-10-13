@@ -2,6 +2,9 @@ package com.acme.order.payment;
 
 import com.acme.order.api.payment.PaymentDtos.CreateRequest;
 import com.acme.order.api.payment.PaymentDtos.PayView;
+import com.acme.order.api.payment.PaymentDtos.MethodView;
+import com.acme.order.common.core.BizException;
+import com.acme.order.common.core.ErrorCode;
 import com.acme.order.common.observability.OrderMetrics;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,13 +21,15 @@ public class PaymentService {
 
     private final PaymentRepository repo;
     private final OrderMetrics metrics;
+    private final PaymentProviders providers;
 
     @Value("${debug.failure.create-error:false}")
     private boolean createError;
 
-    public PaymentService(PaymentRepository r, OrderMetrics metrics) {
+    public PaymentService(PaymentRepository r, OrderMetrics metrics, PaymentProviders providers) {
         repo = r;
         this.metrics = metrics;
+        this.providers = providers;
     }
 
     @Transactional
@@ -32,12 +37,20 @@ public class PaymentService {
         if (createError) {
             throw new IllegalStateException("fault injection: payment create error");
         }
-        return repo.create(r.orderNo(), r.userId(), r.amountCent());
+        if (r.orderNo() == null || !r.orderNo().matches("[A-Za-z0-9_-]{1,64}") || r.userId() <= 0 || r.amountCent() <= 0) {
+            throw new BizException(ErrorCode.VALIDATION_FAILED, "订单号、用户或支付金额不合法");
+        }
+        var provider = providers.requireAvailable(r.methodCode());
+        return provider.checkout(repo.create(r.orderNo(), r.userId(), r.amountCent(), r.methodCode()));
     }
 
     @Transactional
-    public boolean mockSuccess(String no, String notify) {
-        boolean changed = repo.success(no, notify);
+    public boolean mockSuccess(String no, long user, String notify) {
+        providers.requireAvailable("MOCK");
+        if (notify == null || notify.isBlank() || notify.length() > 64) {
+            throw new BizException(ErrorCode.VALIDATION_FAILED, "通知标识应为 1 到 64 个字符");
+        }
+        boolean changed = repo.success(no, user, notify);
         if (changed) {
             metrics.increment("payment_success_total");
         } else {
@@ -46,7 +59,11 @@ public class PaymentService {
         return changed;
     }
 
-    public PayView get(String no) {
-        return repo.get(no);
+    public PayView get(String no, long user) {
+        return repo.get(no, user);
+    }
+
+    public java.util.List<MethodView> methods() {
+        return providers.methods();
     }
 }

@@ -7,6 +7,8 @@ import org.slf4j.MDC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,7 +26,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BizException.class)
     ResponseEntity<ApiResponse<Void>> business(BizException ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error(ex.getCode(), ex.getMessage(), MDC.get("traceId")));
+        int status = ex.getCode() == ErrorCode.UNAUTHORIZED ? 401 : ex.getCode() == ErrorCode.FORBIDDEN ? 403 : 400;
+        return ResponseEntity.status(status).body(ApiResponse.error(ex.getCode(), ex.getMessage(), MDC.get("traceId")));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -40,5 +43,11 @@ public class GlobalExceptionHandler {
         LOG.error("Unhandled request exception, traceId={}", MDC.get("traceId"), ex);
         return ResponseEntity.status(500)
             .body(ApiResponse.error(ErrorCode.SYSTEM_BUSY, "系统繁忙，请稍后重试", MDC.get("traceId")));
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    ResponseEntity<ApiResponse<Void>> malformedRequest(Exception ex) {
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error(ErrorCode.VALIDATION_FAILED, "请求参数格式无效", MDC.get("traceId")));
     }
 }

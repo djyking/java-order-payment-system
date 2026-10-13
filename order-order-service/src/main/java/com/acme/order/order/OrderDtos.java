@@ -8,6 +8,10 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * 订单服务接口使用的数据传输对象集合。
@@ -38,7 +42,7 @@ public final class OrderDtos {
      * @author heyu
      * @since 2026-08-12
      */
-    public record SettlementRequest(@NotEmpty List<@Valid Item> items) {
+    public record SettlementRequest(@NotEmpty @Size(max = 100) List<@NotNull @Valid Item> items) {
     }
 
     /**
@@ -52,7 +56,9 @@ public final class OrderDtos {
      * @author heyu
      * @since 2026-08-12
      */
-    public record SettlementLine(long skuId, String skuName, long priceCent, int quantity, long amountCent) {
+    public record SettlementLine(
+        @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.ser.std.ToStringSerializer.class) long skuId,
+        String skuName, long priceCent, int quantity, long amountCent) {
     }
 
     /**
@@ -73,7 +79,7 @@ public final class OrderDtos {
      * @author heyu
      * @since 2026-08-12
      */
-    public record CreateRequest(@NotEmpty List<@Valid Item> items) {
+    public record CreateRequest(@NotEmpty @Size(max = 100) List<@NotNull @Valid Item> items) {
     }
 
     /**
@@ -89,7 +95,9 @@ public final class OrderDtos {
      * @author heyu
      * @since 2026-08-12
      */
-    public record OrderView(String orderNo, long userId, String status, String payStatus, long totalAmountCent,
+    public record OrderView(String orderNo,
+        @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.ser.std.ToStringSerializer.class) long userId,
+        String status, String payStatus, long totalAmountCent,
         List<SettlementLine> items, LocalDateTime createTime) {
     }
 
@@ -101,6 +109,10 @@ public final class OrderDtos {
      * @author heyu
      * @since 2026-08-12
      */
-    public record PayView(String payOrderNo, String status) {
+    public record PayRequest(@NotBlank @Pattern(regexp = "[A-Z0-9_]{1,32}") String methodCode) {
+    }
+
+    public record PayView(String payOrderNo, String status, String methodCode, String actionType,
+        String payUrl, String qrCode, String expiresAt) {
     }
 }

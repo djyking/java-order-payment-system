@@ -1,5 +1,7 @@
 package com.acme.order.api.user;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 /**
  * 用户服务接口使用的数据传输对象集合。
  *
@@ -28,11 +30,11 @@ public final class UserDtos {
      * @param userId 用户标识
      * @param username 用户名
      * @param role 用户角色
-     * @param token 访问令牌
+     * @param accessToken 访问令牌
      * @author heyu
      * @since 2026-07-15
      */
-    public record LoginResponse(long userId, String username, String role, String token) {
+    public record LoginResponse(@JsonFormat(shape = JsonFormat.Shape.STRING) long userId, String username, String role, String accessToken) {
     }
 
     /**
@@ -44,6 +46,6 @@ public final class UserDtos {
      * @author heyu
      * @since 2026-07-15
      */
-    public record UserView(long userId, String username, String role) {
+    public record UserView(@JsonFormat(shape = JsonFormat.Shape.STRING) long userId, String username, String role) {
     }
 }

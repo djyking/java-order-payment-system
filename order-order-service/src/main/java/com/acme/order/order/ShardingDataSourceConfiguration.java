@@ -64,6 +64,7 @@ public class ShardingDataSourceConfiguration {
         sharding.getTables().add(databaseShardedTable("outbox_event"));
         sharding.getTables().add(databaseShardedTable("mq_consume_log"));
         sharding.getTables().add(databaseShardedTable("order_route"));
+        sharding.getTables().add(databaseShardedTable("order_create_request"));
         sharding.getTables().add(databaseShardedTable("reconciliation_exception"));
         sharding.getBindingTableGroups().add(new ShardingTableReferenceRuleConfiguration(
             "order-tables", "trade_order,trade_order_item,trade_order_status_log"));

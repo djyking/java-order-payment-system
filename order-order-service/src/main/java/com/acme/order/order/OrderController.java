@@ -57,14 +57,9 @@ public class OrderController {
     }
 
     @PostMapping("/{no}/pay")
-    ApiResponse<OrderDtos.PayView> pay(@PathVariable String no, @RequestHeader("X-User-Id") long u) {
-        return ApiResponse.ok(s.pay(no, u), MDC.get("traceId"));
-    }
-
-    @PostMapping("/{no}/deliver")
-    ApiResponse<Void> deliver(@PathVariable String no, @RequestHeader("X-User-Id") long u) {
-        s.deliver(no, u);
-        return ApiResponse.ok(null, MDC.get("traceId"));
+    ApiResponse<OrderDtos.PayView> pay(@PathVariable String no, @RequestHeader("X-User-Id") long u,
+        @Valid @RequestBody OrderDtos.PayRequest request) {
+        return ApiResponse.ok(s.pay(no, u, request.methodCode()), MDC.get("traceId"));
     }
 
     @PostMapping("/{no}/receive")

@@ -34,13 +34,18 @@ public class PaymentController {
     }
 
     @PostMapping("/api/payments/{no}/mock-success")
-    ApiResponse<Boolean> success(@PathVariable String no,
+    ApiResponse<Boolean> success(@PathVariable String no, @RequestHeader("X-User-Id") long user,
         @RequestHeader(value = "X-Notify-Id", required = false) String id) {
-        return ApiResponse.ok(s.mockSuccess(no, id == null ? UUID.randomUUID().toString() : id), MDC.get("traceId"));
+        return ApiResponse.ok(s.mockSuccess(no, user, id == null ? UUID.randomUUID().toString() : id), MDC.get("traceId"));
     }
 
     @GetMapping("/api/payments/{no}")
-    ApiResponse<PayView> get(@PathVariable String no) {
-        return ApiResponse.ok(s.get(no), MDC.get("traceId"));
+    ApiResponse<PayView> get(@PathVariable String no, @RequestHeader("X-User-Id") long user) {
+        return ApiResponse.ok(s.get(no, user), MDC.get("traceId"));
+    }
+
+    @GetMapping("/api/payments/methods")
+    ApiResponse<java.util.List<com.acme.order.api.payment.PaymentDtos.MethodView>> methods() {
+        return ApiResponse.ok(s.methods(), MDC.get("traceId"));
     }
 }

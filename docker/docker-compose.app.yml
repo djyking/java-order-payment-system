@@ -1,0 +1,64 @@
+x-app-env: &app-env
+  MYSQL_HOST: mysql
+  MYSQL_PORT: 3306
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: 5672
+  NACOS_SERVER_ADDR: nacos:8848
+  SENTINEL_DASHBOARD: sentinel:8858
+  JWT_SECRET: ${JWT_SECRET:?Run scripts/init-local.ps1 or set JWT_SECRET}
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN}
+x-app: &app
+  restart: unless-stopped
+  mem_limit: 640m
+  depends_on:
+    mysql: {condition: service_healthy}
+    redis: {condition: service_healthy}
+    rabbitmq: {condition: service_healthy}
+    nacos: {condition: service_healthy}
+services:
+  prometheus:
+    volumes:
+      - ./prometheus/prometheus-app.yml:/etc/prometheus/prometheus.yml:ro
+  order-user-service:
+    <<: *app
+    build: {context: .., args: {JAR_FILE: order-user-service/target/order-user-service-1.0.0-SNAPSHOT.jar}}
+    environment:
+      <<: *app-env
+      ORDER_WORKER_ID: 1
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set bootstrap admin password}
+  order-product-service:
+    <<: *app
+    build: {context: .., args: {JAR_FILE: order-product-service/target/order-product-service-1.0.0-SNAPSHOT.jar}}
+    environment: {<<: *app-env, ORDER_WORKER_ID: 2}
+  order-inventory-service:
+    <<: *app
+    build: {context: .., args: {JAR_FILE: order-inventory-service/target/order-inventory-service-1.0.0-SNAPSHOT.jar}}
+    environment: {<<: *app-env, ORDER_WORKER_ID: 3}
+  order-order-service:
+    <<: *app
+    build: {context: .., args: {JAR_FILE: order-order-service/target/order-order-service-1.0.0-SNAPSHOT.jar}}
+    environment: {<<: *app-env, ORDER_WORKER_ID: 4}
+  order-payment-service:
+    <<: *app
+    build: {context: .., args: {JAR_FILE: order-payment-service/target/order-payment-service-1.0.0-SNAPSHOT.jar}}
+    environment:
+      <<: *app-env
+      ORDER_WORKER_ID: 5
+      PAYMENT_MOCK_ENABLED: ${PAYMENT_MOCK_ENABLED:-false}
+  order-query-service:
+    <<: *app
+    build: {context: .., args: {JAR_FILE: order-query-service/target/order-query-service-1.0.0-SNAPSHOT.jar}}
+    environment: {<<: *app-env, ORDER_WORKER_ID: 6}
+  order-gateway:
+    <<: *app
+    build: {context: .., args: {JAR_FILE: order-gateway/target/order-gateway-1.0.0-SNAPSHOT.jar}}
+    environment: {<<: *app-env, ORDER_WORKER_ID: 7, ALLOW_DEV_HEADER: "false"}
+    ports: ["127.0.0.1:8080:8080"]
+  web:
+    build: ../web
+    ports: ["127.0.0.1:3000:80"]
+    depends_on: [order-gateway]
+    restart: unless-stopped

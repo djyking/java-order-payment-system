@@ -20,14 +20,13 @@ export const options = {
 };
 
 export default function () {
-  const skuId = Number(__ENV.SKU_ID || 10001);
-  const userBase = Number(__ENV.USER_BASE || 50000);
-  const userId = userBase + ((__VU * 100000 + __ITER) % 10000);
+  if (!__ENV.ACCESS_TOKEN) throw new Error('Set ACCESS_TOKEN to a registered test user JWT');
+  const skuId = String(__ENV.SKU_ID || '19999');
   const body = JSON.stringify({ items: [{ skuId, quantity: 1 }] });
   const params = {
     headers: {
       'Content-Type': 'application/json',
-      'X-User-Id': String(userId),
+      'Authorization': `Bearer ${__ENV.ACCESS_TOKEN}`,
       'X-Idempotency-Token': `${__VU}-${__ITER}-${Date.now()}`,
     },
     timeout: '15s',

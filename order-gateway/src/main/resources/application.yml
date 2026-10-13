@@ -18,17 +18,17 @@ spring:
         webflux:
           routes:
             - { id: user, uri: "lb://order-user-service", predicates: ["Path=/api/auth/**,/api/users/**"] }
-            - { id: product, uri: "lb://order-product-service", predicates: ["Path=/api/products/**,/api/skus/**"] }
+            - { id: product, uri: "lb://order-product-service", predicates: ["Path=/api/products,/api/products/**,/api/skus/**,/api/admin/products/**"] }
             - id: order
               uri: "lb://order-order-service"
-              predicates: ["Path=/api/orders/**,/api/seckill/**"]
+              predicates: ["Path=/api/orders/**,/api/seckill/**,/api/admin/order-operations/**"]
               filters:
                 - name: RequestRateLimiter
                   args: { key-resolver: "#{@userKeyResolver}", redis-rate-limiter.replenishRate: 50, redis-rate-limiter.burstCapacity: 100, redis-rate-limiter.requestedTokens: 1 }
+            - { id: inventory, uri: "lb://order-inventory-service", predicates: ["Path=/api/admin/inventory/**"] }
             - { id: payment, uri: "lb://order-payment-service", predicates: ["Path=/api/payments/**"] }
             - { id: query, uri: "lb://order-query-service", predicates: ["Path=/api/admin/orders/**,/admin/query-projection/**"] }
 management.endpoints.web.exposure.include: health,info,prometheus
 management.metrics.tags.application: ${spring.application.name}
 security:
-  jwt.secret: ${JWT_SECRET:change-this-enterprise-order-system-secret-at-least-32-bytes}
-  allow-dev-header: ${ALLOW_DEV_HEADER:true}
+  jwt.secret: ${JWT_SECRET}
