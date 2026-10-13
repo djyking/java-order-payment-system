@@ -69,27 +69,24 @@ public class OrderProjectionConsumer {
         boolean paid = "OrderPaid".equals(type);
         boolean canceled = "OrderCanceled".equals(type);
         int eventVersion = e.get("eventVersion") instanceof Number version ? version.intValue() : 1;
+        // 状态只向更高版本推进；支付成功事实和不可变的创建快照允许迟到补全。
         jdbc.update(
             "INSERT INTO order_query_projection(order_no,user_id,status,pay_status,total_amount_cent,pay_amount_cent,"
                 + "item_count,sku_count,first_item_name,event_version,pay_time,cancel_time,create_time,update_time) "
-                + "VALUES(?,?,?,?,?,?,?,?,?,?,IF(?,NOW(3),NULL),IF(?,NOW(3),NULL),NOW(3),NOW(3)) "
+                + "VALUES(?,?,?,?,?,?,?,?,?,?,CASE WHEN ? THEN NOW(3) END,CASE WHEN ? THEN NOW(3) END,NOW(3),NOW(3)) "
                 + "ON DUPLICATE KEY UPDATE "
-                + "status=IF(VALUES(event_version)>=event_version,VALUES(status),status),"
-                + "pay_status=IF(VALUES(event_version)>=event_version AND VALUES(pay_status)='PAID','PAID',pay_status),"
-                + "pay_amount_cent=IF(VALUES(event_version)>=event_version,"
-                + "GREATEST(pay_amount_cent,VALUES(pay_amount_cent)),pay_amount_cent),"
-                + "user_id=IF(VALUES(event_version)>=event_version AND VALUES(user_id)<>0,VALUES(user_id),user_id),"
-                + "total_amount_cent=IF(VALUES(event_version)>=event_version AND VALUES(total_amount_cent)<>0,"
-                + "VALUES(total_amount_cent),total_amount_cent),"
-                + "item_count=IF(VALUES(event_version)>=event_version AND VALUES(item_count)<>0,"
-                + "VALUES(item_count),item_count),"
-                + "sku_count=IF(VALUES(event_version)>=event_version AND VALUES(sku_count)<>0,"
-                + "VALUES(sku_count),sku_count),"
-                + "first_item_name=IF(VALUES(event_version)>=event_version,"
-                + "COALESCE(VALUES(first_item_name),first_item_name),first_item_name),"
-                + "pay_time=IF(VALUES(event_version)>=event_version,COALESCE(VALUES(pay_time),pay_time),pay_time),"
-                + "cancel_time=IF(VALUES(event_version)>=event_version,"
-                + "COALESCE(VALUES(cancel_time),cancel_time),cancel_time),"
+                + "status=CASE WHEN VALUES(event_version)>=event_version THEN VALUES(status) ELSE status END,"
+                + "pay_status=CASE WHEN VALUES(pay_status)='PAID' THEN 'PAID' ELSE pay_status END,"
+                + "pay_amount_cent=GREATEST(pay_amount_cent,VALUES(pay_amount_cent)),"
+                + "user_id=CASE WHEN user_id=0 THEN VALUES(user_id) ELSE user_id END,"
+                + "total_amount_cent=CASE WHEN total_amount_cent=0 THEN VALUES(total_amount_cent) "
+                + "ELSE total_amount_cent END,"
+                + "item_count=CASE WHEN item_count=0 THEN VALUES(item_count) ELSE item_count END,"
+                + "sku_count=CASE WHEN sku_count=0 THEN VALUES(sku_count) ELSE sku_count END,"
+                + "first_item_name=COALESCE(first_item_name,VALUES(first_item_name)),"
+                + "pay_time=COALESCE(pay_time,VALUES(pay_time)),"
+                + "cancel_time=CASE WHEN VALUES(event_version)>=event_version "
+                + "THEN COALESCE(VALUES(cancel_time),cancel_time) ELSE cancel_time END,"
                 + "event_version=GREATEST(event_version,VALUES(event_version)),update_time=NOW(3)",
             no, user, status, paid ? "PAID" : "UNPAID", amount, payAmount, itemCount, skuCount, firstItemName,
             eventVersion, paid, canceled);

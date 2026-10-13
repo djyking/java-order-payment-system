@@ -22,8 +22,8 @@ public class RabbitDlqMetrics {
 
     public RabbitDlqMetrics(AmqpAdmin admin, MeterRegistry registry) {
         this.admin = admin;
-        for (String queue : List.of(RabbitTopology.PAYMENT_DLQ, RabbitTopology.CONFIRM_DLQ,
-            RabbitTopology.RELEASE_DLQ, RabbitTopology.CLOSE_DLQ, RabbitTopology.QUERY_DLQ)) {
+        for (String queue : List.of(RabbitTopology.PAYMENT_DLQ, RabbitTopology.INVENTORY_DLQ,
+            RabbitTopology.CLOSE_DLQ, RabbitTopology.QUERY_DLQ)) {
             Gauge.builder("dlq_message_count", this, metrics -> metrics.messages(queue))
                 .tag("queue", queue).strongReference(true).register(registry);
         }
