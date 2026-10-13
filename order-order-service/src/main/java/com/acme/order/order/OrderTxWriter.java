@@ -25,7 +25,8 @@ public class OrderTxWriter {
     }
 
     @Transactional
-    public void persist(long id, String no, long user, OrderDtos.SettlementView q) {
+    public void persist(long id, String no, long user, OrderDtos.SettlementView q, String token, String fingerprint) {
+        repo.recordRequest(user, token, fingerprint, no);
         repo.create(id, no, user, q.totalAmountCent(),
             q.items().stream().mapToInt(OrderDtos.SettlementLine::quantity).sum(), q.items(),
             UUID.randomUUID().toString());

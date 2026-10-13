@@ -25,45 +25,52 @@ public class PaymentRepository {
         jdbc = j;
     }
 
-    public PayView create(String order, long user, long amount) {
+    public PayView create(String order, long user, long amount, String method) {
         try {
             long id = Ids.next();
             String no = Ids.payNo(id);
             jdbc.update(
                 "INSERT INTO pay_order(id,pay_order_no,biz_order_no,user_id,amount_cent,status,channel_code,version,"
-                    + "create_time,update_time) VALUES(?,?,?,?,?,10,'MOCK',0,NOW(3),NOW(3))",
-                id, no, order, user, amount);
-            return new PayView(no, order, amount, "UNPAID");
+                    + "create_time,update_time) VALUES(?,?,?,?,?,10,?,0,NOW(3),NOW(3))",
+                id, no, order, user, amount, method);
+            return view(no, order, amount, 10, method);
         } catch (DuplicateKeyException e) {
-            return byOrder(order);
+            var existing = byOrder(order, user);
+            if (existing.amountCent() != amount) {
+                throw new BizException(ErrorCode.PAY_AMOUNT_MISMATCH, "支付单金额与订单金额不一致");
+            }
+            if (!existing.methodCode().equals(method)) {
+                throw new BizException(ErrorCode.PAY_METHOD_CONFLICT, "订单已有其他方式的支付单，请继续使用原支付方式");
+            }
+            return existing;
         }
     }
 
-    public PayView get(String no) {
-        return jdbc.query("SELECT pay_order_no,biz_order_no,amount_cent,status FROM pay_order WHERE pay_order_no=?",
+    public PayView get(String no, long user) {
+        return jdbc.query("SELECT pay_order_no,biz_order_no,amount_cent,status,channel_code FROM pay_order WHERE pay_order_no=? AND user_id=?",
             r -> {
                 if (!r.next()) {
                     throw new BizException(ErrorCode.PAY_ORDER_NOT_FOUND, "支付单不存在");
                 }
-                return new PayView(r.getString(1), r.getString(2), r.getLong(3),
-                    r.getInt(4) == 20 ? "PAID" : "UNPAID");
-            }, no);
+                return view(r.getString(1), r.getString(2), r.getLong(3), r.getInt(4), r.getString(5));
+            }, no, user);
     }
 
-    public PayView byOrder(String order) {
-        return jdbc.query("SELECT pay_order_no,biz_order_no,amount_cent,status FROM pay_order WHERE biz_order_no=?",
+    public PayView byOrder(String order, long user) {
+        return jdbc.query("SELECT pay_order_no,biz_order_no,amount_cent,status,channel_code FROM pay_order WHERE biz_order_no=? AND user_id=?",
             r -> {
                 if (!r.next()) {
                     throw new BizException(ErrorCode.PAY_ORDER_NOT_FOUND, "支付单不存在");
                 }
-                return new PayView(r.getString(1), r.getString(2), r.getLong(3),
-                    r.getInt(4) == 20 ? "PAID" : "UNPAID");
-            }, order);
+                return view(r.getString(1), r.getString(2), r.getLong(3), r.getInt(4), r.getString(5));
+            }, order, user);
     }
 
-    public boolean success(String no, String notifyId) {
-        var p = get(no);
-        long userId = jdbc.queryForObject("SELECT user_id FROM pay_order WHERE pay_order_no=?", Long.class, no);
+    public boolean success(String no, long userId, String notifyId) {
+        var p = get(no, userId);
+        if (!"MOCK".equals(p.methodCode())) {
+            throw new BizException(ErrorCode.FORBIDDEN, "仅开发测试支付单支持此操作");
+        }
         try {
             jdbc.update(
                 "INSERT INTO pay_notify_log(id,notify_id,pay_order_no,channel_code,notify_payload,process_status,"
@@ -74,8 +81,8 @@ public class PaymentRepository {
         }
         int n = jdbc.update(
             "UPDATE pay_order SET status=20,pay_time=NOW(3),version=version+1,update_time=NOW(3) "
-                + "WHERE pay_order_no=? AND status=10",
-            no);
+                + "WHERE pay_order_no=? AND user_id=? AND channel_code='MOCK' AND status=10",
+            no, userId);
         if (n == 1) {
             String event = UUID.randomUUID().toString();
             String payload = "{\"orderNo\":\"" + p.orderNo() + "\",\"payOrderNo\":\"" + no + "\",\"userId\":" + userId
@@ -89,5 +96,15 @@ public class PaymentRepository {
             return true;
         }
         return false;
+    }
+
+    private PayView view(String no, String order, long amount, int status, String method) {
+        String action = switch (method) {
+            case "ALIPAY_PAGE" -> "REDIRECT";
+            case "WECHAT_NATIVE" -> "QR_CODE";
+            case "MOCK" -> "MOCK";
+            default -> "NONE";
+        };
+        return new PayView(no, order, amount, status == 20 ? "PAID" : "UNPAID", method, action, null, null, null);
     }
 }

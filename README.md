@@ -1,16 +1,18 @@
 # Java 订单支付系统
 
-基于 Java 17 和 Spring Cloud 构建的订单支付系统，覆盖商品结算、订单创建、库存预占、支付确认、超时关单、发货和收货。项目围绕订单状态、库存数量和支付结果的一致性，实现本地事务、Outbox 消息、消费幂等、失败补偿、分库分表和查询投影，并提供本机运行与故障验证记录。
+基于 Java 17、Spring Cloud 与 Vue 3 构建的订单支付系统，提供用户购买页面与管理员工作台，覆盖注册登录、商品维护、库存管理、报价下单、订单查询和履约处理。项目围绕订单状态、库存数量和支付结果的一致性，实现本地事务、Outbox 消息、消费幂等、失败补偿、分库分表和查询投影。
 
-支付服务内置演示支付渠道，可通过接口触发支付成功通知，验证支付单、订单、库存和查询投影之间的完整处理链路。
+支付接入采用多方式适配接口，收银台根据服务端能力显示可选方式和可用状态。开发环境可显式启用测试渠道验证状态处理；真实渠道接入所需资料和验证步骤见[支付接入交接](docs/payment-handoff.md)。
 
 ## 已实现功能
 
 | 领域 | 功能 |
 |---|---|
+| 用户与权限 | 数据库用户、加盐密码哈希、注册与 JWT 登录、管理员角色、网关与业务服务双层校验、内部服务身份校验 |
+| 页面与商品 | 响应式用户端、商品列表/详情、报价确认、个人订单；管理员商品新增、价格编辑、上下架与库存维护 |
 | 订单 | 商品重新报价、创建幂等、订单状态机、取消、支付、发货、收货及用户订单查询 |
 | 库存 | MySQL 条件更新预占库存，预占确认与释放，库存流水、过期释放及失败补偿 |
-| 支付 | 支付单创建与查询、演示支付成功通知、通知去重及支付事件发布 |
+| 支付 | 多支付方式能力查询、适配器注册、支付归属校验、支付单复用、默认关闭的测试渠道、通知去重及支付事件发布 |
 | 消息一致性 | 业务数据与 Outbox 同事务提交，发布确认、失败退避重试、消费日志与业务状态幂等 |
 | 超时与恢复 | RabbitMQ TTL + DLX 延迟关单、数据库扫描兜底、消费有限重试与死信队列、支付/关单异常记录 |
 | 服务治理 | Nacos 服务注册发现与配置接入、客户端负载均衡、Gateway Redis 限流、Sentinel 限流与慢调用/异常熔断 |
@@ -58,23 +60,23 @@ RabbitMQ 保留已有持久队列的声明兼容性。支付死信进入 `paymen
 
 ## 技术栈与服务
 
-Java 17、Spring Boot 3.5.7、Spring Cloud 2025.0.0、Spring Cloud Alibaba 2025.0.0.0、ShardingSphere-JDBC 5.5.2、MySQL、Redis、RabbitMQ、Nacos、Sentinel、Prometheus、Grafana。
+Java 17、Spring Boot 3.5.7、Spring Cloud 2025.0.0、Spring Cloud Alibaba 2025.0.0.0、ShardingSphere-JDBC 5.5.2、MySQL、Redis、RabbitMQ、Nacos、Sentinel、Prometheus、Grafana；前端使用 Vue 3、TypeScript、Vite 和 Vue Router。
 
 工程包含 20 个 Maven reactor 模块，运行时由网关与 6 个业务服务组成：
 
 | 服务 | 本机端口 | 职责 |
 |---|---:|---|
 | `order-gateway` | 8080 | API 路由、认证、TraceId、限流 |
-| `order-user-service` | 8081 | 演示账号登录、JWT、当前用户 |
+| `order-user-service` | 8081 | 注册、数据库认证、JWT、当前用户与管理员初始化 |
 | `order-product-service` | 8082 | 商品、SKU、价格和商品快照 |
 | `order-inventory-service` | 8083 | 库存预占、确认、释放和补偿 |
 | `order-order-service` | 8084 | 订单编排、状态机、Outbox、超时关闭 |
-| `order-payment-service` | 8085 | 支付单、演示支付通知和支付事件 |
+| `order-payment-service` | 8085 | 支付单、多方式适配、测试通知和支付事件 |
 | `order-query-service` | 8086 | CQRS 查询投影及重建 |
 
 ## 本机启动
 
-以下步骤采用“Docker Compose 运行中间件，宿主机运行 Java 服务”的方式。准备 JDK 17、Maven 3.9+、Git 和 Docker Compose。
+准备 JDK 17、Maven 3.9+、Git 和 Docker Compose。可用 Compose 同时启动中间件、应用与网页，也可在宿主机分别启动 Java 和前端。
 
 ### 1. 获取代码并准备中间件配置
 
@@ -83,10 +85,13 @@ git clone https://github.com/djyking/java-order-payment-system.git
 cd java-order-payment-system
 ```
 
-将 `docker/.env.example` 复制为 `docker/.env`，填写以下值：
+Windows 可运行 `powershell -ExecutionPolicy Bypass -File scripts/init-local.ps1` 生成本机独立密钥和管理员密码；脚本不会覆盖已有配置。也可将 `docker/.env.example` 复制为 `docker/.env`，填写以下值：
 
 - `NACOS_AUTH_TOKEN`：至少 32 字节随机值的 Base64 编码。
 - `NACOS_AUTH_IDENTITY_KEY`、`NACOS_AUTH_IDENTITY_VALUE`：独立的节点身份值。
+- `JWT_SECRET`、`INTERNAL_SERVICE_TOKEN`：两个独立的至少 32 字符随机值，全部应用使用一致配置。
+- `BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`：首次启动创建的管理员，密码至少 12 字符；后续启动不会重置已有密码。
+- `PAYMENT_MOCK_ENABLED=false`：默认关闭测试支付。
 - `SENTINEL_JAR_PATH`：本机 Sentinel Dashboard 1.8.9 JAR 的绝对路径。可从 [Sentinel 1.8.9 发布页](https://github.com/alibaba/Sentinel/releases/tag/1.8.9)获取 `sentinel-dashboard-1.8.9.jar`；Windows 路径使用正斜杠，例如 `D:/middleware/sentinel-dashboard-1.8.9.jar`。
 
 Compose 将该 JAR 挂载到 Sentinel 容器，并读取 `.env` 中的配置。
@@ -126,9 +131,12 @@ docker compose --env-file docker/.env -f docker/docker-compose.yml exec mysql my
 ```sql
 SOURCE /docker-entrypoint-initdb.d/08_sharding.sql;
 SOURCE /docker-entrypoint-initdb.d/11_query_projection_upgrade.sql;
+SOURCE /docker-entrypoint-initdb.d/12_identity_catalog.sql;
+SOURCE /docker-entrypoint-initdb.d/13_order_requests.sql;
+SOURCE /docker-entrypoint-initdb.d/14_inventory_admin.sql;
 ```
 
-两个脚本可重复执行，分别补齐分片结构与历史表字段、CQRS 查询投影字段。执行完成后，再构建并启动 Java 服务。Compose 保留原项目标识，以继续使用已有持久数据卷。
+脚本可重复执行，补齐分片/投影字段、禁用旧明文演示账号、增加持久化下单幂等记录及库存管理审计。完成后再构建并启动应用。Compose 保留原项目标识及持久数据卷。
 
 ### 3. 构建并启动 Java 服务
 
@@ -138,7 +146,15 @@ SOURCE /docker-entrypoint-initdb.d/11_query_projection_upgrade.sql;
 mvn clean package
 ```
 
-该命令构建全部模块、执行测试并生成可执行 JAR。随后在独立终端中分别启动以下服务，待业务服务注册后启动网关：
+该命令执行测试并生成可执行 JAR。启动完整应用与网页：
+
+```bash
+docker compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.app.yml up -d --build
+```
+
+服务就绪后访问 `http://localhost:3000`。普通用户在页面注册；管理员使用本机 `docker/.env` 中的初始化账号。管理员新增商品后，在库存页面设置数量再上架。默认只能下单并查看待支付订单，收银台如实显示渠道状态。已付款订单由管理员处理发货，买家确认收货。
+
+也可仅使用中间件 Compose，然后在启动 Java 的终端中先导出上述安全环境变量（`.env` 不会被 `java -jar` 自动加载），再分别启动以下服务：
 
 ```bash
 java -jar order-product-service/target/order-product-service-1.0.0-SNAPSHOT.jar
@@ -151,6 +167,8 @@ java -jar order-gateway/target/order-gateway-1.0.0-SNAPSHOT.jar
 ```
 
 检查 `http://localhost:8080/actuator/health` 及 8081–8086 各服务的 `/actuator/health`。上述订单服务命令使用默认单库模式。
+
+前端本机开发：安装 Node.js 22+ 和 pnpm，执行 `cd web`、`pnpm install --frozen-lockfile`、`pnpm dev`，在 Vite 输出的地址访问页面。开发代理将 `/api` 请求转发到本机 8080。前端生产部署使用 `web/Dockerfile`，Nginx 提供同域页面和 API 代理。
 
 ### 4. 启用订单分片模式
 
@@ -166,25 +184,25 @@ java -jar order-order-service/target/order-order-service-1.0.0-SNAPSHOT.jar --sp
 
 ## 订单与支付接口示例
 
-演示登录账号为 `demo/demo123`。以下请求使用默认启用的本机开发 Header，入口统一为 Gateway。示例使用 Bash/curl；PowerShell 可调用 `curl.exe` 并按终端规则传递 JSON。
+先在页面注册并登录，或调用 `POST /api/auth/register`、`POST /api/auth/login`（请求体为 `username` 和 `password`）。使用返回的 `accessToken` 设置 `TOKEN` 环境变量。旧的 `demo/demo123` 及伪造身份 Header 不再提供登录能力。以下为 Bash/curl 示例：
 
 ```bash
-curl -X POST http://localhost:8080/api/orders/settlement -H 'Content-Type: application/json' -H 'X-User-Id: 10001' -d '{"items":[{"skuId":10001,"quantity":1}]}'
+curl -X POST http://localhost:8080/api/orders/settlement -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{"items":[{"skuId":"10001","quantity":1}]}'
 
-curl -X POST http://localhost:8080/api/orders -H 'Content-Type: application/json' -H 'X-User-Id: 10001' -H 'X-Idempotency-Token: order-demo-001' -d '{"items":[{"skuId":10001,"quantity":1}]}'
+curl -X POST http://localhost:8080/api/orders -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -H 'X-Idempotency-Token: order-demo-001' -d '{"items":[{"skuId":"10001","quantity":1}]}'
 ```
 
 从创建结果取出 `orderNo`，替换下面的 `ORDER_NO`；从支付请求结果取出 `payOrderNo`，替换 `PAY_ORDER_NO`：
 
 ```bash
-curl -X POST http://localhost:8080/api/orders/ORDER_NO/pay -H 'X-User-Id: 10001'
+curl http://localhost:8080/api/payments/methods -H "Authorization: Bearer $TOKEN"
 
-curl -X POST http://localhost:8080/api/payments/PAY_ORDER_NO/mock-success -H 'X-User-Id: 10001' -H 'X-Notify-Id: notify-demo-001'
+curl -X POST http://localhost:8080/api/orders/ORDER_NO/pay -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"methodCode":"MOCK"}'
 
-curl http://localhost:8080/api/orders/ORDER_NO -H 'X-User-Id: 10001'
+curl http://localhost:8080/api/orders/ORDER_NO -H "Authorization: Bearer $TOKEN"
 ```
 
-`mock-success` 是内置演示渠道的支付成功入口。同一通知标识重复提交按幂等逻辑处理；支付结果经 RabbitMQ 异步推进订单状态和库存确认。
+示例中的 `MOCK` 只在设置 `PAYMENT_MOCK_ENABLED=true` 后可用，不执行真实扣款。默认支付宝和微信方式返回待接入状态。支付入口由服务端返回，浏览器不能指定金额或直接把真实支付改为成功。返回给页面的用户与商品 ID 使用字符串，金额保留整数分。
 
 ## 测试与运行验证
 
@@ -192,12 +210,12 @@ curl http://localhost:8080/api/orders/ORDER_NO -H 'X-User-Id: 10001'
 mvn clean test
 ```
 
-当前自动化测试共 10 个用例：订单状态机、H2 库存条件更新和通知标识去重 4 例，调用实际 CQRS 消费者 SQL 的事件乱序测试 4 例，以及 RabbitMQ 队列声明兼容性测试 2 例。
+自动化测试覆盖密码存储、身份与权限、商品维护、库存调整、订单幂等与状态流转、支付归属及方式选择，并保留 CQRS 事件乱序和 RabbitMQ 队列兼容性回归。前端构建与页面检查命令见 [web](web/README.md)。本阶段实际执行结果及环境限制见[业务端验证记录](docs/business-validation.md)。
 
 启动服务后，可安装 k6 并使用初始化的压测专用 SKU `19999` 执行订单创建压测：
 
 ```bash
-k6 run -e RATE=10 -e DURATION=30s -e SKU_ID=19999 -e BASE_URL=http://localhost:8080 scripts/k6-order.js
+k6 run -e ACCESS_TOKEN="$TOKEN" -e RATE=10 -e DURATION=30s -e SKU_ID=19999 -e BASE_URL=http://localhost:8080 scripts/k6-order.js
 ```
 
 历史本机验收覆盖服务启动、Nacos 负载分配、Sentinel 熔断恢复、分片路由、Outbox 恢复、重复消息处理、DLQ 重放、CQRS 重建及 k6 压测。各记录保留当时的日期、版本与环境；性能数据及测量口径见 [压测记录](docs/pressure-test-result.md)。

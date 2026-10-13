@@ -35,8 +35,10 @@ public class AdminOrderController {
             + "first_item_name,pay_time,cancel_time,create_time,update_time "
             + "FROM order_query_projection"
             + (status == null ? "" : " WHERE status=?") + " ORDER BY create_time DESC LIMIT ? OFFSET ?";
-        List<Map<String, Object>> rows = status == null ? jdbc.queryForList(sql, safe, page * safe)
-            : jdbc.queryForList(sql, status, safe, page * safe);
+        long offset = (long) Math.max(page, 0) * safe;
+        List<Map<String, Object>> rows = status == null ? jdbc.queryForList(sql, safe, offset)
+            : jdbc.queryForList(sql, status, safe, offset);
+        rows.forEach(row -> row.computeIfPresent("user_id", (key, value) -> value.toString()));
         return ApiResponse.ok(rows, MDC.get("traceId"));
     }
 }

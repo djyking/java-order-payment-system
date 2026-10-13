@@ -20,7 +20,7 @@ public final class PaymentDtos {
      * @author heyu
      * @since 2026-07-15
      */
-    public record CreateRequest(String orderNo, long userId, long amountCent) {
+    public record CreateRequest(String orderNo, long userId, long amountCent, String methodCode) {
     }
 
     /**
@@ -33,6 +33,10 @@ public final class PaymentDtos {
      * @author heyu
      * @since 2026-07-15
      */
-    public record PayView(String payOrderNo, String orderNo, long amountCent, String status) {
+    public record PayView(String payOrderNo, String orderNo, long amountCent, String status, String methodCode,
+        String actionType, String payUrl, String qrCode, String expiresAt) {
+    }
+
+    public record MethodView(String code, String name, boolean available, String reason, String actionType) {
     }
 }

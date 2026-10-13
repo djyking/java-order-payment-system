@@ -84,23 +84,44 @@ public class OrderRepository {
                 + "FROM trade_order WHERE user_id=? ORDER BY create_time DESC LIMIT ? OFFSET ?",
             (r, n) -> new Snapshot(r.getLong(1), r.getString(2), r.getLong(3), OrderStatus.of(r.getInt(4)), r.getInt(5),
                 r.getLong(6), r.getInt(7), r.getTimestamp(8).toLocalDateTime()),
-            user, size, page * size);
+            user, size, (long) page * size);
     }
 
     public boolean transit(Snapshot s, OrderStatus target, String operation, String eventType) {
+        return transit(s, target, operation, eventType, s.user());
+    }
+
+    public boolean transit(Snapshot s, OrderStatus target, String operation, String eventType, long operatorId) {
         int n = jdbc.update(
             "UPDATE trade_order SET status=?,version=version+1,"
                 + (target == OrderStatus.CANCELED ? "cancel_time=NOW(3)," : "")
+                + (target == OrderStatus.COMPLETED ? "finish_time=NOW(3)," : "")
                 + "update_time=NOW(3) WHERE order_id=? AND user_id=? AND status=? AND version=?",
             target.getCode(), s.id(), s.user(), s.status().getCode(), s.version());
         if (n == 1) {
             jdbc.update(
                 "INSERT INTO trade_order_status_log(id,order_id,order_no,user_id,before_status,after_status,"
-                    + "operate_type,create_time) VALUES(?,?,?,?,?,?,?,NOW(3))",
-                Ids.next(), s.id(), s.no(), s.user(), s.status().getCode(), target.getCode(), operation);
+                    + "operate_type,operator_id,create_time) VALUES(?,?,?,?,?,?,?,?,NOW(3))",
+                Ids.next(), s.id(), s.no(), s.user(), s.status().getCode(), target.getCode(), operation, operatorId);
             insertOutbox(UUID.randomUUID().toString(), eventType, s.no(), s.user(), eventPayload(s, s.version() + 1));
         }
         return n == 1;
+    }
+
+    public String completedRequest(long user, String token, String fingerprint) {
+        return jdbc.query("SELECT order_no,request_hash FROM order_create_request WHERE user_id=? AND request_token=?",
+            rows -> {
+                if (!rows.next()) { return null; }
+                if (!fingerprint.equals(rows.getString("request_hash"))) {
+                    throw new BizException(ErrorCode.ORDER_DUPLICATE_SUBMIT, "下单令牌已用于不同的商品，请重新确认订单");
+                }
+                return rows.getString("order_no");
+            }, user, token);
+    }
+
+    public void recordRequest(long user, String token, String fingerprint, String orderNo) {
+        jdbc.update("INSERT INTO order_create_request(user_id,request_token,request_hash,order_no,create_time) VALUES(?,?,?,?,NOW(3))",
+            user, token, fingerprint, orderNo);
     }
 
     public void markPaid(Snapshot s) {
@@ -145,7 +166,7 @@ public class OrderRepository {
     }
 
     private String escapeJson(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        return new String(com.fasterxml.jackson.core.io.JsonStringEncoder.getInstance().quoteAsString(value));
     }
 
     /**

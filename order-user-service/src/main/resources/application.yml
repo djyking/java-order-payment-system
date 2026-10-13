@@ -4,9 +4,14 @@ spring:
   config.import:
     - "optional:nacos:order-system-shared.yml?group=DEFAULT_GROUP&refreshEnabled=true"
     - "optional:nacos:${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+  datasource: { url: "jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:13306}/order_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai", username: "${MYSQL_USER:order}", password: "${MYSQL_PASSWORD:order123456}" }
   cloud.nacos:
     discovery: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}" }
     config: { server-addr: "${NACOS_SERVER_ADDR:127.0.0.1:18848}", file-extension: yml }
 management.endpoints.web.exposure.include: health,info,prometheus
 management.metrics.tags.application: ${spring.application.name}
-security.jwt.secret: ${JWT_SECRET:change-this-enterprise-order-system-secret-at-least-32-bytes}
+security.jwt.secret: ${JWT_SECRET}
+
+security.bootstrap-admin:
+  username: ${BOOTSTRAP_ADMIN_USERNAME:}
+  password: ${BOOTSTRAP_ADMIN_PASSWORD:}

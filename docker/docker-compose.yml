@@ -5,21 +5,21 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root123456
       TZ: Asia/Shanghai
-    ports: ["13306:3306"]
+    ports: ["127.0.0.1:13306:3306"]
     volumes:
       - mysql-data:/var/lib/mysql
       - ../sql:/docker-entrypoint-initdb.d:ro
     healthcheck: { test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot123456"], interval: 10s, timeout: 5s, retries: 20 }
   redis:
     image: redis:7.4-alpine
-    ports: ["16379:6379"]
+    ports: ["127.0.0.1:16379:6379"]
     volumes: ["redis-data:/data"]
     command: ["redis-server", "--appendonly", "yes"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 10s, timeout: 3s, retries: 10 }
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     environment: { RABBITMQ_DEFAULT_USER: order, RABBITMQ_DEFAULT_PASS: order123456 }
-    ports: ["25672:5672", "25673:15672", "25692:15692"]
+    ports: ["127.0.0.1:25672:5672", "127.0.0.1:25673:15672", "127.0.0.1:25692:15692"]
     volumes: ["rabbit-data:/var/lib/rabbitmq"]
     command: ["/bin/sh", "-c", "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"]
     healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, timeout: 5s, retries: 20 }
@@ -31,13 +31,13 @@ services:
       NACOS_AUTH_TOKEN: "${NACOS_AUTH_TOKEN}"
       NACOS_AUTH_IDENTITY_KEY: "${NACOS_AUTH_IDENTITY_KEY}"
       NACOS_AUTH_IDENTITY_VALUE: "${NACOS_AUTH_IDENTITY_VALUE}"
-    ports: ["18848:8848", "18849:8080", "19848:9848"]
+    ports: ["127.0.0.1:18848:8848", "127.0.0.1:18849:8080", "127.0.0.1:19848:9848"]
     volumes: ["nacos-data:/home/nacos/data"]
     healthcheck: { test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/8848' && timeout 2 bash -c '</dev/tcp/127.0.0.1/8080'"], interval: 15s, timeout: 5s, retries: 30 }
   sentinel:
     image: eclipse-temurin:17-jre-jammy
     command: ["java", "-Dserver.port=8858", "-Dcsp.sentinel.dashboard.server=localhost:8858", "-Dproject.name=sentinel-dashboard", "-jar", "/opt/sentinel-dashboard.jar"]
-    ports: ["18858:8858"]
+    ports: ["127.0.0.1:18858:8858"]
     volumes:
       - type: bind
         source: "${SENTINEL_JAR_PATH:-D:/middleware/runtime/sentinel-1.8.9/sentinel-dashboard-1.8.9.jar}"
@@ -46,7 +46,7 @@ services:
     healthcheck: { test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/8858'"], interval: 10s, timeout: 3s, retries: 30 }
   prometheus:
     image: prom/prometheus:v3.14.0
-    ports: ["19090:9090"]
+    ports: ["127.0.0.1:19090:9090"]
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -56,7 +56,7 @@ services:
   grafana:
     image: grafana/grafana:13.2.1
     environment: { GF_SECURITY_ADMIN_USER: admin, GF_SECURITY_ADMIN_PASSWORD: admin123456 }
-    ports: ["13000:3000"]
+    ports: ["127.0.0.1:13000:3000"]
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

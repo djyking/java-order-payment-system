@@ -23,6 +23,10 @@ public final class JwtService {
     private final Duration ttl;
 
     public JwtService(String secret, Duration ttl) {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32
+            || secret.startsWith("change-this-")) {
+            throw new IllegalArgumentException("JWT_SECRET must be configured with at least 32 random bytes");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.ttl = ttl;
     }
@@ -34,6 +38,11 @@ public final class JwtService {
     }
 
     public Claims parse(String token) {
-        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+        var claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+        if (Long.parseLong(claims.getSubject()) <= 0
+            || !("USER".equals(claims.get("role", String.class)) || "ADMIN".equals(claims.get("role", String.class)))) {
+            throw new IllegalArgumentException("Invalid token identity");
+        }
+        return claims;
     }
 }

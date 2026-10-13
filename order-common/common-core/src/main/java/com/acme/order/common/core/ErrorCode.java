@@ -63,6 +63,8 @@ public enum ErrorCode {
      * 支付通知重复。
      */
     PAY_NOTIFY_DUPLICATED,
+    PAY_METHOD_UNAVAILABLE,
+    PAY_METHOD_CONFLICT,
     /**
      * 消息处理失败。
      */

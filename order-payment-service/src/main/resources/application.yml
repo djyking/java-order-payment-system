@@ -1,4 +1,5 @@
 server: { port: 8085 }
+payment.mock-enabled: "${PAYMENT_MOCK_ENABLED:false}"
 spring:
   application: { name: order-payment-service }
   config.import:

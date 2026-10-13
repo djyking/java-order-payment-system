@@ -1,5 +1,7 @@
 package com.acme.order.api.product;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 /**
  * 商品服务接口使用的数据传输对象集合。
  *
@@ -23,6 +25,6 @@ public final class ProductDtos {
      * @author heyu
      * @since 2026-07-15
      */
-    public record SkuView(long skuId, long spuId, String spuName, String skuName, long priceCent, boolean onShelf) {
+    public record SkuView(@JsonFormat(shape = JsonFormat.Shape.STRING) long skuId, @JsonFormat(shape = JsonFormat.Shape.STRING) long spuId, String spuName, String skuName, long priceCent, boolean onShelf) {
     }
 }
